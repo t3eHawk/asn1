@@ -13,7 +13,8 @@
 from .decodings import *
 from .rules import *
 from ._strings import strings
-from tables import table
+from ._table import table
+import json
 
 class bits():
   def __init__ (
@@ -99,6 +100,31 @@ class bits():
   def parse (self):
     self.dataBlocks = self.bytesParse(self.dataBytes)
     pass
+
+  # Get asn.1 structure of blocks.
+  def view(self, blocks = None, output = None):
+    blocks = blocks or self.dataBlocks
+    viewer = dict()
+    for block in blocks:
+      tag = block.tag.hex()
+      if type(block).__name__ == 'blockPrimitive':
+        try:
+          value = block.data.decode()
+        except UnicodeDecodeError:
+          value = block.data.hex()
+      else:
+        value = self.view(block.data)
+
+      if tag in viewer and viewer[tag] is not None:
+        if isinstance(viewer[tag], list) is False:
+          viewer[tag] = [viewer[tag]]
+        viewer[tag].append(value)
+      else:
+        viewer[tag] = value
+    if output is not None:
+      with open(output, 'w') as output_file:
+        json.dump(viewer, output_file, indent = True)
+    return viewer
 
   # If passed blocks structure placed in inputStructure they can be recognized,
   # i.e. their names and data types can be defined using the ID.
