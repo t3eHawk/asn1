@@ -81,10 +81,14 @@ class bits():
   # If block is finally analized function must analyze next bytes, i.e. bytes
   # starting after pointer in value of total previous block length.
   # Function returns list of found blocks.
-  def bytesParse (self,  Bytes, ID = str()):
+  def bytesParse (self, Bytes, ID = str()):
     pos = 0
     blocks = list()
     while pos < len(Bytes):
+      # There can be empty FF bytes between records.
+      if (Bytes[pos] & 255) == 255:
+        pos += 1
+        continue
       tag, length, data, lenBlock = BER (Bytes, pos)
       blID = ID+tag.hex()
       if (tag[0] & 32) == 32:
@@ -92,6 +96,7 @@ class bits():
         block = self.blockComplex (tag, blID, length, blData)
       else:
         block = self.blockPrimitive (tag, blID, length, data)
+      block.pos = pos
       blocks.append(block)
       pos = lenBlock
     return blocks
@@ -105,14 +110,17 @@ class bits():
   def view(self, blocks = None, output = None):
     blocks = blocks or self.dataBlocks
     viewer = dict()
+
     for block in blocks:
       tag = block.tag.hex()
-      if type(block).__name__ == 'blockPrimitive':
+      if block.length == 0:
+        value = None
+      elif type(block).__name__ == 'blockPrimitive':
         try:
           value = block.data.decode()
         except UnicodeDecodeError:
           value = block.data.hex()
-      else:
+      elif type(block).__name__ == 'blockComplex':
         value = self.view(block.data)
 
       if tag in viewer and viewer[tag] is not None:
@@ -121,6 +129,7 @@ class bits():
         viewer[tag].append(value)
       else:
         viewer[tag] = value
+
     if output is not None:
       with open(output, 'w') as output_file:
         json.dump(viewer, output_file, indent = True)
